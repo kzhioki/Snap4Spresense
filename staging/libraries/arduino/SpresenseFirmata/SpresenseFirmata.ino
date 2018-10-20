@@ -257,9 +257,6 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
 #endif
       }
       //puts("PLAY!!");
-      ledOn(LED1);
-      ledOff(LED2);
-      ledOff(LED3);
       //printf("%s\n", sounds[rmsg.arg]);
       myFile = theSD.open(sounds[rmsg.arg]);
       err = theAudio->writeFrames(id, myFile);
@@ -289,9 +286,6 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
     case STOP:
     stop:
       //puts("STOP!!");
-      ledOff(LED1);
-      ledOn(LED2);
-      ledOff(LED3);
       if (state == PLAYING) {
         theAudio->stopPlayer(id);
         myFile.close();
@@ -300,9 +294,6 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
       break;
     case VOL:
       //puts("VOL!!");
-      ledOff(LED1);
-      ledOff(LED2);
-      ledOn(LED3);
       if (id == AudioClass::Player0) {
         vol0 = rmsg.arg;
       } else {
