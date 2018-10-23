@@ -26,7 +26,6 @@
 #include <Servo.h>
 #include <Wire.h>
 #include <Firmata.h>
-#include <Audio.h>
 
 #define I2C_WRITE                   B00000000
 #define I2C_READ                    B00001000
@@ -44,6 +43,7 @@
 #define MINIMUM_SAMPLING_INTERVAL   1
 
 #define USE_AUDIO
+#define USE_LCD
 
 #ifdef USE_AUDIO
 
@@ -201,7 +201,6 @@ const char *mp3_list[] =
 static int aplay(AudioClass::PlayerId id, File& myFile)
 {
   ssize_t ret;
-  struct msg_s smsg;
   struct msg_s rmsg;
   struct timespec ts;
   enum state_s {
@@ -220,7 +219,6 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
   while (1) {
     err = AUDIOLIB_ECODE_OK;
 
-    //puts("loop!!");
     if (state == PLAYING) {
       clock_gettime(CLOCK_REALTIME, &ts);
       ts.tv_nsec += 40000;
@@ -274,6 +272,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
           myFile.seek(0);
         } else {
 #if 0
+          struct msg_s smsg;
           smsg.cmd = STOP;
           smsg.arg = 0;
           mq_send(mqd, (const char*)&smsg, sizeof(msg_s), 0);
@@ -324,6 +323,205 @@ static int aplay1(int argc, FAR char *argv[])
   return aplay(AudioClass::Player1, myFile1);
 }
 #endif // USE_AUDIO
+
+#ifdef USE_LCD
+
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_ILI9341.h> // Hardware-specific library
+#include <SPI.h>
+#include <SDHCI.h>
+#include <asmp/mpshm.h>
+
+#define TFT_RST 8
+#define TFT_DC  9
+#define TFT_CS -1
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+#ifndef USE_AUDIO
+SDClass theSD;
+#endif
+
+GFXcanvas16 Canvas0(ILI9341_TFTHEIGHT, ILI9341_TFTWIDTH); // from heap
+//GFXcanvas16 Canvas1(ILI9341_TFTHEIGHT, ILI9341_TFTWIDTH); // from heap
+GFXcanvas16 CanvasB(ILI9341_TFTHEIGHT, ILI9341_TFTWIDTH, NULL); //  from shm
+GFXcanvas16 *pCanvas;
+
+#define FRAME_BUFFER_SIZE (128 * 1024 * 2)
+//#define FRAME_BUFFER_SIZE (128 * 1024 * 3)
+
+void allocate_graphics_memory()
+{
+  mpshm_t shm;
+  void *virt = NULL;
+  uint32_t *baseaddr;
+
+  if (0 == mpshm_init(&shm, 1, FRAME_BUFFER_SIZE)) {
+    virt = mpshm_attach(&shm, 0);
+    if (virt != NULL) {
+      baseaddr = (uint32_t*)mpshm_virt2phys(&shm, virt);
+    }
+  }
+  CanvasB.setBuffer((uint16_t*)baseaddr);
+  //Canvas0.setBuffer((uint16_t*)(baseaddr + 320 * 240 * 2));
+  //Canvas1.setBuffer((uint16_t*)(baseaddr + 320 * 240 * 4));
+}
+
+const char *bg_list[] =
+{
+  "atom_playground.rgab",
+  "baseball-field.rgab",
+  "basketball-court1-a.rgab",
+  "basketball-court1-b.rgab",
+  "beach_malibu.rgab",
+  "beach_rio.rgab",
+  "bedroom1.rgab",
+  "bedroom2.rgab",
+  "bench_with_view.rgab",
+  "berkeley_mural.rgab",
+  "blue_sky.rgab",
+  "blue_sky2.rgab",
+  "blue_sky3.rgab",
+  "boardwalk.rgab",
+  "brick_wall1.rgab",
+  "brick_wall2.rgab",
+  "brick-wall1.rgab",
+  "brick-wall2.rgab",
+  "brick-wall-and-stairs.rgab",
+  "building_at_mit.rgab",
+  "canyon.rgab",
+  "castle1.rgab",
+  "castle2.rgab",
+  "castle3.rgab",
+  "castle4.rgab",
+  "castle5.rgab",
+  "chalkboard.rgab",
+  "circles.rgab",
+  "city_with_water.rgab",
+  "city_with_water2.rgab",
+  "clothing_store.rgab",
+  "desert.rgab",
+  "doily.rgab",
+  "driveway.rgab",
+  "flower_bed.rgab",
+  "flowers.rgab",
+  "forest.rgab",
+  "garden_rock.rgab",
+  "gingerbread.rgab",
+  "goal1.rgab",
+  "goal2.rgab",
+  "graffiti.rgab",
+  "grand_canyon.rgab",
+  "gravel_desert.rgab",
+  "greek_theater.rgab",
+  "hall.rgab",
+  "hallway_outdoors.rgab",
+  "hay_field.rgab",
+  "hearts1.rgab",
+  "hearts2.rgab",
+  "hill.rgab",
+  "houses.rgab",
+  "kitchen.rgab",
+  "lake.rgab",
+  "light.rgab",
+  "metro1.rgab",
+  "moon.rgab",
+  "neon_tunnel.rgab",
+  "night_city.rgab",
+  "night_city_with_street.rgab",
+  "parking-ramp.rgab",
+  "party.rgab",
+  "party_room.rgab",
+  "pathway.rgab",
+  "playing-field.rgab",
+  "pool.rgab",
+  "purple.rgab",
+  "rays.rgab",
+  "room1.rgab",
+  "room2.rgab",
+  "room3.rgab",
+  "route66.rgab",
+  "school1.rgab",
+  "school2.rgab",
+  "slopes.rgab",
+  "space.rgab",
+  "sparkling.rgab",
+  "spotlight-stage.rgab",
+  "spotlight-stage2.rgab",
+  "stage1.rgab",
+  "stage2.rgab",
+  "stars.rgab",
+  "stripes.rgab",
+  "the_movies_inside.rgab",
+  "the_movies_outside.rgab",
+  "track.rgab",
+  "train_tracks1.rgab",
+  "train_tracks2.rgab",
+  "tree.rgab",
+  "tree-gifts.rgab",
+  "underwater1.rgab",
+  "underwater2.rgab",
+  "underwater3.rgab",
+  "urban1.rgab",
+  "urban2.rgab",
+  "village.rgab",
+  "water_and_rocks.rgab",
+  "wave.rgab",
+  "winter.rgab",
+  "winter-lights.rgab",
+  "woods.rgab",
+  "woods_and_bench.rgab",
+  "xy-grid.rgab",
+};
+
+void background(const char *filename)
+{
+  File bgFile;
+  uint16_t *bgImage;
+  int w, h;
+
+  if ((bgFile = theSD.open(filename)) == NULL) {
+    Serial.print(F("File not found"));
+    return;
+  }
+  bgFile.read(&w, 4);
+  bgFile.read(&h, 4);
+  bgImage = CanvasB.getBuffer();
+  bgFile.read(bgImage, w * h * 2);
+  bgFile.close();
+}
+
+int imageDraw(uint16_t *img, int16_t x, int16_t y, int16_t w, int16_t h)
+{
+  return pCanvas->drawImage(x, y, w, h, img);
+}
+
+int toggle = 0;
+
+void prepare()
+{
+#if 0
+  if (toggle % 2) {
+    pCanvas = &Canvas0;
+  } else {
+    pCanvas = &Canvas1;
+  }
+#else
+  pCanvas = &Canvas0;
+#endif
+  pCanvas->setBackGround(CanvasB.getBuffer());
+}
+
+void update()
+{
+  // refresh
+  tft.drawRGBBitmap(0, 0,
+                    pCanvas->getBuffer(),
+                    ILI9341_TFTHEIGHT,
+                    ILI9341_TFTWIDTH);
+  toggle++;
+}
+
+#endif // USE_LCD
 
 /*==============================================================================
  * GLOBAL VARIABLES
@@ -977,73 +1175,85 @@ void sysexCallback(byte command, byte argc, byte *argv)
       break;
 #ifdef USE_AUDIO
   case 0x08: // beep
-      { //tone function
-          //Arg 0 = volume
-          //Arg 1...argc = Frequency
+    { //tone function
+      //Arg 0 = volume
+      //Arg 1...argc = Frequency
 
-          //Determine frequency from text
-          int placeCounter = 1;
-          int volume = (int)argv[0] % 101;
-          volume -= 100;
-          if (volume < -90) {
-              volume = -90;
-          }
-          int freq = 0;
-          for (int i = argc - 1; i > 0; i--){
-              freq += (argv[i] - 0x30) * placeCounter;
-              placeCounter *= 10;
-          }
-
-          theAudio->setBeep(1, volume, freq);
-          break;
+      //Determine frequency from text
+      int placeCounter = 1;
+      int volume = (int)argv[0] % 101;
+      volume -= 100;
+      if (volume < -90) {
+        volume = -90;
       }
+      int freq = 0;
+      for (int i = argc - 1; i > 0; i--){
+        freq += (argv[i] - 0x30) * placeCounter;
+        placeCounter *= 10;
+      }
+
+      theAudio->setBeep(1, volume, freq);
       break;
+    }
+    break;
   case 0x09: //noTone function
-      theAudio->setBeep(0, 0, 0);
-      break;
+    theAudio->setBeep(0, 0, 0);
+    break;
   case 0x0a: // audio play
-      {
-          struct msg_s smsg;
-          mqd_t mqd;
+    {
+      struct msg_s smsg;
+      mqd_t mqd;
 
-          //Arg 0 = playerId
-          //Arg 1 = command
-          //Arg 2 = fileNo, volume
-          byte id  = argv[0];
-          byte cmd = argv[1];
-          byte arg = argv[2];
+      //Arg 0 = playerId
+      //Arg 1 = command
+      //Arg 2 = fileNo, volume
+      byte id  = argv[0];
+      byte cmd = argv[1];
+      byte arg = argv[2];
 
-          smsg.arg = (int)arg;
+      smsg.arg = (int)arg;
 
-          switch (cmd) {
-          case 0:
-              smsg.cmd = PLAY;
-              if (arg >= sizeof(mp3_list) / sizeof(mp3_list[0])) {
-                  return;
-              }
-              break;
-          case 1:
-              smsg.cmd = STOP;
-              break;
-          case 2:
-              smsg.cmd = REPEAT;
-              break;
-          case 3:
-              smsg.cmd = VOL;
-              smsg.arg %= 100;
-              smsg.arg = 12 * arg - 1080;
-              if (smsg.arg < -1020) {
-                  smsg.arg = -1020;
-              }
-              break;
-          default:
-              return;
-          }
-          mqd = (id) ? mqd1 : mqd0;
-          mq_send(mqd, (const char*)&smsg, sizeof(msg_s), 0);
+      switch (cmd) {
+      case 0:
+        smsg.cmd = PLAY;
+        if (arg >= sizeof(mp3_list) / sizeof(mp3_list[0])) {
+          return;
+        }
+        break;
+      case 1:
+        smsg.cmd = STOP;
+        break;
+      case 2:
+        smsg.cmd = REPEAT;
+        break;
+      case 3:
+        smsg.cmd = VOL;
+        smsg.arg %= 100;
+        smsg.arg = 12 * arg - 1080;
+        if (smsg.arg < -1020) {
+          smsg.arg = -1020;
+        }
+        break;
+      default:
+        return;
       }
-      break;
+      mqd = (id) ? mqd1 : mqd0;
+      mq_send(mqd, (const char*)&smsg, sizeof(msg_s), 0);
+    }
+    break;
 #endif // USE_AUDIO
+#ifdef USE_LCD
+  case 0x0b: // background
+    {
+      //Arg 0 = fileNo
+      byte id  = argv[0];
+      id %= sizeof(bg_list) / sizeof(bg_list[0]);
+      background(bg_list[id]);
+      prepare();
+      update();
+    }
+    break;
+#endif // USE_LCD
   }
 }
 
@@ -1106,6 +1316,11 @@ void systemResetCallback()
 void setup()
 {
   Firmata.setFirmwareVersion(FIRMATA_FIRMWARE_MAJOR_VERSION, FIRMATA_FIRMWARE_MINOR_VERSION);
+#ifdef USE_LCD
+  for (int pin = 9; pin <=13; pin++) {
+    Firmata.setPinMode(pin, PIN_MODE_IGNORE);
+  }
+#endif // USE_LCD
 #ifdef USE_AUDIO
   theAudio = AudioClass::getInstance();
   theAudio->begin();
@@ -1137,6 +1352,18 @@ void setup()
   task_create("aplay0", 100, 1024, aplay0, NULL);
   task_create("aplay1", 100, 1024, aplay1, NULL);
 #endif // USE_AUDIO
+
+#ifdef USE_LCD
+  tft.begin();
+  tft.setRotation(1);
+  tft.fillScreen(ILI9341_BLACK);
+
+  allocate_graphics_memory();
+  background("Logo.rgab");
+  prepare();
+  update();
+#endif // USE_LCD
+
   Firmata.attach(ANALOG_MESSAGE, analogWriteCallback);
   Firmata.attach(DIGITAL_MESSAGE, digitalWriteCallback);
   Firmata.attach(REPORT_ANALOG, reportAnalogCallback);
