@@ -44,6 +44,8 @@
 
 #define USE_AUDIO
 #define USE_LCD
+#define USE_TETRIS
+#define USE_BREAKOUT
 
 #ifdef USE_AUDIO
 
@@ -353,7 +355,7 @@ void allocate_graphics_memory()
 {
   mpshm_t shm;
   void *virt = NULL;
-  uint32_t *baseaddr;
+  uint32_t *baseaddr = 0;
 
   if (0 == mpshm_init(&shm, 1, FRAME_BUFFER_SIZE)) {
     virt = mpshm_attach(&shm, 0);
@@ -361,9 +363,11 @@ void allocate_graphics_memory()
       baseaddr = (uint32_t*)mpshm_virt2phys(&shm, virt);
     }
   }
-  CanvasB.setBuffer((uint16_t*)baseaddr);
-  //Canvas0.setBuffer((uint16_t*)(baseaddr + 320 * 240 * 2));
-  //Canvas1.setBuffer((uint16_t*)(baseaddr + 320 * 240 * 4));
+  if (baseaddr) {
+    CanvasB.setBuffer((uint16_t*)baseaddr);
+    //Canvas0.setBuffer((uint16_t*)(baseaddr + 320 * 240 * 2));
+    //Canvas1.setBuffer((uint16_t*)(baseaddr + 320 * 240 * 4));
+  }
 }
 
 const char *bg_list[] =
@@ -1327,17 +1331,16 @@ void setup()
   theAudio->setRenderingClockMode(AS_CLKMODE_NORMAL);
   theAudio->setPlayerMode(AS_SETPLAYER_OUTPUTDEVICE_SPHP);
 
-  err_t err;
-  err = theAudio->initPlayer(AudioClass::Player0,
-                             AS_CODECTYPE_MP3,
-                             "/mnt/sd0/BIN",
-                             AS_SAMPLINGRATE_AUTO,
-                             AS_CHANNEL_MONO);
-  err = theAudio->initPlayer(AudioClass::Player1,
-                             AS_CODECTYPE_MP3,
-                             "/mnt/sd0/BIN",
-                             AS_SAMPLINGRATE_AUTO,
-                             AS_CHANNEL_MONO);
+  theAudio->initPlayer(AudioClass::Player0,
+                       AS_CODECTYPE_MP3,
+                       "/mnt/sd0/BIN",
+                       AS_SAMPLINGRATE_AUTO,
+                       AS_CHANNEL_MONO);
+  theAudio->initPlayer(AudioClass::Player1,
+                       AS_CODECTYPE_MP3,
+                       "/mnt/sd0/BIN",
+                       AS_SAMPLINGRATE_AUTO,
+                       AS_CHANNEL_MONO);
   theAudio->setVolume(-2, vol0, vol1);
   /* Create audio player message queue */
   struct mq_attr mq_attr;
@@ -1390,6 +1393,14 @@ void setup()
 /*==============================================================================
  * LOOP()
  *============================================================================*/
+
+#ifdef USE_TETRIS
+#include "Games/Tetris/ArduinoTetris.cpp"
+#endif
+#ifdef USE_BREAKOUT
+#include "Games/Breakout/ArduinoBreakout.cpp"
+#endif
+
 void loop()
 {
   byte pin, analogPin;
@@ -1398,6 +1409,55 @@ void loop()
    * FTDI buffer using Serial.print()  */
   checkDigitalInputs();
 
+  /* Ura game mode */
+  bool tetris = false;
+  bool breakout = false;
+#ifdef USE_TETRIS
+  pinMode(PIN_D07, INPUT);
+  if ((analogRead(A5) < 10) && (LOW == digitalRead(PIN_D07))) {
+    tetris = true;
+  }
+#endif
+#ifdef USE_BREAKOUT
+  if ((analogRead(A5) > 500) && (LOW == digitalRead(PIN_D07))) {
+    breakout = true;
+  }
+#endif
+  if (tetris || breakout) {
+    struct msg_s smsg;
+
+    smsg.cmd = VOL;
+    smsg.arg = -100;
+    mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
+
+    smsg.cmd = REPEAT;
+    smsg.arg = 1;
+    mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
+
+#ifdef USE_TETRIS
+    if (tetris) {
+      smsg.cmd = PLAY;
+      smsg.arg = 99;
+      mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
+
+      //printf("Let's Tetris\n");
+      tetris_main();
+    }
+#endif
+#ifdef USE_BREAKOUT
+    if (breakout) {
+      smsg.cmd = PLAY;
+      smsg.arg = 41;
+      mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
+
+      //printf("Let's Breakout\n");
+      breakout_main();
+    }
+#endif
+    smsg.cmd = STOP;
+    smsg.arg = 0;
+    mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
+  }
   /* STREAMREAD - processing incoming messagse as soon as possible, while still
    * checking digital inputs.  */
   while (Firmata.available())
