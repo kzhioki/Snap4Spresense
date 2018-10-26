@@ -110,7 +110,11 @@ class Joystick
       int n = analogRead(pin);
     
       n -= CENTER;
-      n /= 50;
+      if (n > 0) {
+        n /= 150;
+      } else {
+        n /= 50;
+      }
       if (n > 4) n = 4;
       return n;
     }

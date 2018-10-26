@@ -21,6 +21,7 @@
 
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ILI9341.h> // Hardware-specific library
+#include "../beeping.h"
 #include "../TFTv2_extended.h"
 #include "breakout.cpp"
 #include "../TFTv2_extended.cpp"
@@ -63,6 +64,7 @@ void animateScreen()
 
 void breakout_setup() {
   
+  Beeping::turnOn();
   Joystick::init();
 }
 

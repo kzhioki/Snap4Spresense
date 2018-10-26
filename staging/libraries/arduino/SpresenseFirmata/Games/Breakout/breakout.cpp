@@ -25,6 +25,7 @@
 #include "ball.cpp"
 #include "paddle.cpp"
 #include "../joystick.h"
+#include "../beeping.h"
 #include "config.h"
 #include "scoreboard.cpp"
 #include "tiles.cpp"
@@ -40,6 +41,8 @@ class Breakout
   Scoreboard score;
 
   Tiles tiles;
+
+  int beep;
 
   public:
   
@@ -91,7 +94,8 @@ class Breakout
 
         for (int j = (10-i) * 100; j > 200; j-=1500 / (i+1))
         {
-          delay(100);
+          Beeping::beep(j, 100);
+          usleep(100*1000);
         }
       }
 
@@ -135,12 +139,20 @@ class Breakout
         
           if (ball.collision(paddle))
           {
-              ;
+            beep = 200;
+            Beeping::beep(400,30);
           }
         
           // check collision w/ tiles
         
           int scored = ball.collision(tiles);
+
+          if ( scored > 0)
+          {
+            beep *=1.1;
+            if ( beep > 3000) beep = 3000;
+            Beeping::beep(beep,25);
+          }
 
           if (scored > 0)
           {
@@ -161,6 +173,7 @@ class Breakout
 
             for (int i = 54; i > 30; i--)
             {
+              Beeping::beep(random(i,i*i), 3);
               delay(6);
             }
           
@@ -191,6 +204,7 @@ class Breakout
       ball.setXY(MAX_X / 2, MAX_Y - PADDLE_H - BALL_R * 2 - 2);
       ball.setXiYi(-BALL_SPEED_H, -BALL_SPEED_V);
     
+      beep = 200;
     }
 };
 

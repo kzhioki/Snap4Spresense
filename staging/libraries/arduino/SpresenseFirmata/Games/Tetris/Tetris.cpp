@@ -27,6 +27,7 @@
 extern Adafruit_ILI9341 tft;
 #include "Arduino.h"
 #include "../joystick.h"
+#include "../beeping.h"
 #include "../TFTv2_extended.h"
 
 #define LCD_WIDTH             319
@@ -395,8 +396,9 @@ class Tetris
 
       // check if lines were made
       
-      score();
       //Beeping::beep(1500, 25);
+      Beeping::beep(1000, 25);
+      score();
     }
     else
     {
@@ -500,6 +502,7 @@ class Tetris
       }
 
       //Beeping::beep(3000, 50);
+      Beeping::beep(2000, 50);
 
       lines++;
 
@@ -553,7 +556,7 @@ class Tetris
     drawString("Lines", 8, 32, 2, 0x3f);
     drawNumber(level, 74, 8, 2, YELLOW);
     drawNumber(lines, 74, 32, 2, 0x3f);
-    tft.drawRect(5, 2, 130, 52, 0xffff);
+    tft.drawRect(5, 2, 130, 52, WHITE);
   }
 
   // create a sequence of 7 random shapes

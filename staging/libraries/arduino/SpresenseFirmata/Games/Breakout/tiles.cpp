@@ -21,6 +21,7 @@
 #ifndef TILESCPP
 #define TILESCPP
 
+#include "../beeping.h"
 #include "config.h"
 
 class Tiles {
@@ -63,6 +64,7 @@ class Tiles {
         tiles[r][c]= TILE_IS_DRAWN;
         tilesLeftToDraw--;
 
+        Beeping::beep( 400 + r* 35 + c * 2, 5 );
         delay(5);
       }
     

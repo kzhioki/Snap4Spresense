@@ -62,9 +62,11 @@ File myFile1;
 
 mqd_t mqd0;
 mqd_t mqd1;
+mqd_t mqdb;
 
-int vol0 = -100;
-int vol1 = -100;
+int vol0 = -120;
+int vol1 = -120;
+short beep_vol = -20;
 
 enum cmd_e
 {
@@ -73,6 +75,8 @@ enum cmd_e
   STOP,
   REPEAT,
   VOL,
+  BEEP,
+  BEEP_VOL,
   INVALID = 0xffffffff,
 };
 struct msg_s
@@ -200,18 +204,21 @@ const char *mp3_list[] =
   "camera.mp3",
 };
 
+int playerStatus[2] = {0, 0};
+
 static int aplay(AudioClass::PlayerId id, File& myFile)
 {
   ssize_t ret;
   struct msg_s rmsg;
   struct timespec ts;
   enum state_s {
+    STOPPED = 0,
     PLAYING,
-    STOPPED,
   } state = STOPPED;
   err_t err;
   bool repeat = false;
 
+  int index = (id == AudioClass::Player0) ? 0 : 1;
   mqd_t mqd = (id == AudioClass::Player0) ? mqd0 : mqd1;
 #ifdef WAV_SUPPORT
   const char **sounds = (id == AudioClass::Player0) ? mp3_list : wav_list;
@@ -262,6 +269,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
       err = theAudio->writeFrames(id, myFile);
       theAudio->startPlayer(id);
       state = PLAYING;
+      playerStatus[index] = PLAYING;
       /* FALLTHRU */
       //break;
     case PLAYCONT:
@@ -273,14 +281,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
         if (repeat) {
           myFile.seek(0);
         } else {
-#if 0
-          struct msg_s smsg;
-          smsg.cmd = STOP;
-          smsg.arg = 0;
-          mq_send(mqd, (const char*)&smsg, sizeof(msg_s), 0);
-#else
           goto stop;
-#endif
         }
       }
       break;
@@ -292,6 +293,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
         myFile.close();
       }
       state = STOPPED;
+      playerStatus[index] = STOPPED;
       break;
     case VOL:
       //puts("VOL!!");
@@ -307,6 +309,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
       repeat = (rmsg.arg) ? true : false;
       break;
     case INVALID:
+    default:
       //puts("INVALID!!");
       break;
     }
@@ -324,6 +327,50 @@ static int aplay1(int argc, FAR char *argv[])
 {
   return aplay(AudioClass::Player1, myFile1);
 }
+
+static int bplay(int argc, FAR char *argv[])
+{
+  ssize_t ret;
+  struct msg_s rmsg;
+  short frequency;
+  uint16_t duration;
+
+  while (1) {
+    ret = mq_receive(mqdb, (char*)&rmsg, sizeof(struct msg_s), NULL);
+    if (ret < 0) {
+      continue;
+    }
+
+    //printf("cmd=%d arg=%d\n", rmsg.cmd, rmsg.arg);
+    switch (rmsg.cmd) {
+    case BEEP:
+      //puts("BEEP!!");
+      frequency = (short)(rmsg.arg & 0xffff);
+      duration = (uint16_t)((rmsg.arg >> 16) & 0xffff);
+      if (frequency) {
+        theAudio->setBeep(1, beep_vol, frequency);
+        if (duration) {
+          usleep(duration * 1000);
+          theAudio->setBeep(0, 0, 0);
+        }
+      } else {
+        theAudio->setBeep(0, 0, 0);
+      }
+      break;
+    case BEEP_VOL:
+      //puts("BEEP_VOL!!");
+      beep_vol = (short)rmsg.arg;
+      break;
+    case INVALID:
+    default:
+      //puts("INVALID!!");
+      break;
+    }
+  }
+
+  return 0;
+}
+
 #endif // USE_AUDIO
 
 #ifdef USE_LCD
@@ -1180,6 +1227,8 @@ void sysexCallback(byte command, byte argc, byte *argv)
 #ifdef USE_AUDIO
   case 0x08: // beep
     { //tone function
+      struct msg_s smsg;
+
       //Arg 0 = volume
       //Arg 1...argc = Frequency
 
@@ -1195,18 +1244,40 @@ void sysexCallback(byte command, byte argc, byte *argv)
         freq += (argv[i] - 0x30) * placeCounter;
         placeCounter *= 10;
       }
+#if 1
+      if (volume != beep_vol) {
+        smsg.cmd = BEEP_VOL;
+        smsg.arg = volume;
+        mq_send(mqdb, (const char*)&smsg, sizeof(msg_s), 1);
+      }
 
+      smsg.cmd = BEEP;
+      smsg.arg = freq;
+      mq_send(mqdb, (const char*)&smsg, sizeof(msg_s), 1);
+#else
       theAudio->setBeep(1, volume, freq);
+#endif
       break;
     }
     break;
   case 0x09: //noTone function
+#if 1
+    {
+      struct msg_s smsg;
+
+      smsg.cmd = BEEP;
+      smsg.arg = 0;
+      mq_send(mqdb, (const char*)&smsg, sizeof(msg_s), 1);
+    }
+#else
     theAudio->setBeep(0, 0, 0);
+#endif
     break;
   case 0x0a: // audio play
     {
       struct msg_s smsg;
       mqd_t mqd;
+      int msg_prio = 0;
 
       //Arg 0 = playerId
       //Arg 1 = command
@@ -1226,6 +1297,7 @@ void sysexCallback(byte command, byte argc, byte *argv)
         break;
       case 1:
         smsg.cmd = STOP;
+        //msg_prio = 10;
         break;
       case 2:
         smsg.cmd = REPEAT;
@@ -1242,12 +1314,24 @@ void sysexCallback(byte command, byte argc, byte *argv)
         return;
       }
       mqd = (id) ? mqd1 : mqd0;
-      mq_send(mqd, (const char*)&smsg, sizeof(msg_s), 0);
+      mq_send(mqd, (const char*)&smsg, sizeof(msg_s), msg_prio);
+    }
+    break;
+  case 0x0b: // read status
+    {
+      byte id  = argv[0];
+
+      id = (id >= 1) ? 1 : 0;
+
+      Firmata.write(START_SYSEX);
+      Firmata.write(STRING_DATA);
+      Firmata.write(playerStatus[id] + '0');
+      Firmata.write(END_SYSEX);
     }
     break;
 #endif // USE_AUDIO
 #ifdef USE_LCD
-  case 0x0b: // background
+  case 0x0c: // background
     {
       //Arg 0 = fileNo
       byte id  = argv[0];
@@ -1350,10 +1434,12 @@ void setup()
   mq_attr.mq_flags   = 0;
   mqd0 = mq_open("MQD0", O_CREAT | O_RDWR, 0666, &mq_attr);
   mqd1 = mq_open("MQD1", O_CREAT | O_RDWR, 0666, &mq_attr);
+  mqdb = mq_open("MQDB", O_CREAT | O_RDWR, 0666, &mq_attr);
 
   /* Create audio player task */
   task_create("aplay0", 100, 1024, aplay0, NULL);
   task_create("aplay1", 100, 1024, aplay1, NULL);
+  task_create("bplay", 105, 512, bplay, NULL);
 #endif // USE_AUDIO
 
 #ifdef USE_LCD

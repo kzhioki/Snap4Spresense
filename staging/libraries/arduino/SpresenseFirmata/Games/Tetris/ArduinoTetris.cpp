@@ -35,17 +35,23 @@ void drawPreGameScreen()
 void gameOver()
 {
   tft.fillRect(32, 84, 256, 52, BLACK);
-  drawString("Game Over", 48, 94, 4, 0x3ffff);
+  drawString("Game Over", 48, 94, 4, WHITE);
 
   tft.drawRect(32, 84, 256, 52, RED);
 
   Joystick::shock(200);
+  Beeping::beep(600, 200);
+  usleep(300*1000);
+  Beeping::beep(600, 200);
+  usleep(300*1000);
+  Beeping::beep(200, 600);
+  usleep(1500*1000);
   Joystick::waitForClick(BUTTON_A);
 }
 
 void tetris_setup() {
 
-  // initialize joystick
+  Beeping::turnOn();
   Joystick::init();
 }
 
