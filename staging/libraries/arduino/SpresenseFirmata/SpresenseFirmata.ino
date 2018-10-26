@@ -53,6 +53,8 @@
 #include <SDHCI.h>
 #include <errno.h>
 #include <mqueue.h>
+#include <semaphore.h>
+#include <arch/board/board.h>
 
 SDClass theSD;
 AudioClass *theAudio;
@@ -77,6 +79,7 @@ enum cmd_e
   VOL,
   BEEP,
   BEEP_VOL,
+  BEEP_MUTE,
   INVALID = 0xffffffff,
 };
 struct msg_s
@@ -204,6 +207,37 @@ const char *mp3_list[] =
   "camera.mp3",
 };
 
+#define MUTE_PLAYER0 (0x00000001)
+#define MUTE_PLAYER1 (0x00000002)
+#define MUTE_BEEP    (0x00000004)
+
+static void mute_control(uint32_t unmute, uint32_t mute)
+{
+  static sem_t g_sem_mute = SEM_INITIALIZER(1);
+  static uint32_t g_unmute = 0;
+  uint32_t old_unmute;
+
+  sem_wait(&g_sem_mute);
+
+  old_unmute = g_unmute;
+
+  if (unmute) {
+    g_unmute |= unmute;
+  }
+  if (mute) {
+    g_unmute &= ~mute;
+  }
+
+  if (!old_unmute && g_unmute) {
+    board_external_amp_mute_control(false);
+  }
+  if (old_unmute && !g_unmute) {
+    board_external_amp_mute_control(true);
+  }
+
+  sem_post(&g_sem_mute);
+}
+
 int playerStatus[2] = {0, 0};
 
 static int aplay(AudioClass::PlayerId id, File& myFile)
@@ -254,7 +288,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
     switch (rmsg.cmd) {
     case PLAY:
       if (state == PLAYING) {
-#if 1
+#if 1 // ignore play command during playing
         //puts("IGNORE!!");
         break;
 #else
@@ -267,6 +301,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
       //printf("%s\n", sounds[rmsg.arg]);
       myFile = theSD.open(sounds[rmsg.arg]);
       err = theAudio->writeFrames(id, myFile);
+      mute_control(((index) ? MUTE_PLAYER1 : MUTE_PLAYER0), 0);
       theAudio->startPlayer(id);
       state = PLAYING;
       playerStatus[index] = PLAYING;
@@ -290,6 +325,7 @@ static int aplay(AudioClass::PlayerId id, File& myFile)
       //puts("STOP!!");
       if (state == PLAYING) {
         theAudio->stopPlayer(id);
+        mute_control(0, ((index) ? MUTE_PLAYER1 : MUTE_PLAYER0));
         myFile.close();
       }
       state = STOPPED;
@@ -332,13 +368,32 @@ static int bplay(int argc, FAR char *argv[])
 {
   ssize_t ret;
   struct msg_s rmsg;
+  struct timespec ts;
+  enum state_s {
+    MUTED = 0,
+    UNMUTED,
+  } state = MUTED;
   short frequency;
   uint16_t duration;
 
+  clock_gettime(CLOCK_REALTIME, &ts);
+
   while (1) {
-    ret = mq_receive(mqdb, (char*)&rmsg, sizeof(struct msg_s), NULL);
+    if (state == UNMUTED) {
+      ts.tv_sec += 5;
+      ret = mq_timedreceive(mqdb, (char*)&rmsg, sizeof(struct msg_s), NULL, &ts);
+    } else {
+      ret = mq_receive(mqdb, (char*)&rmsg, sizeof(struct msg_s), NULL);
+    }
+
     if (ret < 0) {
-      continue;
+      if ((errno == ETIMEDOUT) && (state == UNMUTED)) {
+        rmsg.cmd = BEEP_MUTE;
+        rmsg.arg = 0;
+      } else {
+        rmsg.cmd = INVALID;
+        rmsg.arg = 0;
+      }
     }
 
     //printf("cmd=%d arg=%d\n", rmsg.cmd, rmsg.arg);
@@ -348,7 +403,10 @@ static int bplay(int argc, FAR char *argv[])
       frequency = (short)(rmsg.arg & 0xffff);
       duration = (uint16_t)((rmsg.arg >> 16) & 0xffff);
       if (frequency) {
+        clock_gettime(CLOCK_REALTIME, &ts);
+        mute_control(MUTE_BEEP, 0);
         theAudio->setBeep(1, beep_vol, frequency);
+        state = UNMUTED;
         if (duration) {
           usleep(duration * 1000);
           theAudio->setBeep(0, 0, 0);
@@ -360,6 +418,12 @@ static int bplay(int argc, FAR char *argv[])
     case BEEP_VOL:
       //puts("BEEP_VOL!!");
       beep_vol = (short)rmsg.arg;
+      break;
+    case BEEP_MUTE:
+      //puts("BEEP_MUTE!!");
+      // delayed mute
+      mute_control(0, MUTE_BEEP);
+      state = MUTED;
       break;
     case INVALID:
     default:
