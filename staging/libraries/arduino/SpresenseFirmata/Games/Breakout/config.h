@@ -26,13 +26,13 @@
 #define TILE_W              (int)((MAX_X + 1) / COLS)
 #define TILE_H              (int)(TILE_W / 2.2)
 
-#define BALL_R              1
+#define BALL_R              2
 #define BALL_SPEED_H        1
 #define BALL_SPEED_V        1
 #define BALL_COLOR          CYAN
 #define BALL_MOVE_WAIT      6
 
-#define PADDLE_W            32
+#define PADDLE_W            20
 #define PADDLE_H            5
 #define PADDLE_TOLERANCE    4
 #define PADDLE_COLOR        LIGHTGREEN

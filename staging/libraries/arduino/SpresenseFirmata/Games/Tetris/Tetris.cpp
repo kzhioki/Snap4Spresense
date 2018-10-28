@@ -53,7 +53,7 @@ extern Adafruit_ILI9341 tft;
 #define DROP_WAIT_INIT        1100
 
 #define INPUT_WAIT_ROT        300
-#define INPUT_WAIT_MOVE       150
+#define INPUT_WAIT_MOVE       300
 
 #define INPUT_WAIT_NEW_SHAPE  400
 
