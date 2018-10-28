@@ -79,7 +79,16 @@ uint8_t drawNumber(long long_num, int16_t poX, int16_t poY, uint8_t size, uint16
 
 uint8_t drawNumber(long long_num, int16_t poX, int16_t poY, uint8_t size, uint16_t fgcolor, uint16_t bgcolor)
 {
-  return drawNumber(long_num, poX, poY, size, fgcolor);
+  tft.setCursor(poX, poY);
+  tft.setTextColor(fgcolor, bgcolor);
+  tft.setTextSize(size);
+  tft.println(long_num);
+  int f = 1;
+  while (long_num > 0) {
+    long_num /= 10;
+    f++;
+  }
+  return f;
 }
 
 /*********************************************************************************************************
