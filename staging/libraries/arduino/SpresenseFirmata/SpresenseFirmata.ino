@@ -44,6 +44,7 @@
 
 #define USE_AUDIO
 #define USE_LCD
+#define USE_MENU
 #define USE_TETRIS
 #define USE_BREAKOUT
 
@@ -1503,7 +1504,7 @@ void setup()
   /* Create audio player task */
   task_create("aplay0", 100, 1024, aplay0, NULL);
   task_create("aplay1", 100, 1024, aplay1, NULL);
-  task_create("bplay", 105, 512, bplay, NULL);
+  task_create("bplay", 105, 1024, bplay, NULL);
 #endif // USE_AUDIO
 
 #ifdef USE_LCD
@@ -1544,12 +1545,9 @@ void setup()
  * LOOP()
  *============================================================================*/
 
-#ifdef USE_TETRIS
-#include "Games/Tetris/ArduinoTetris.cpp"
-#endif
-#ifdef USE_BREAKOUT
-#include "Games/Breakout/ArduinoBreakout.cpp"
-#endif
+#ifdef USE_MENU
+#include "Menu/menu.cpp"
+#endif // USE_MENU
 
 void loop()
 {
@@ -1559,55 +1557,13 @@ void loop()
    * FTDI buffer using Serial.print()  */
   checkDigitalInputs();
 
-  /* Ura game mode */
-  bool tetris = false;
-  bool breakout = false;
-#ifdef USE_TETRIS
+#ifdef USE_MENU
   pinMode(PIN_D07, INPUT);
-  if ((analogRead(A5) < 10) && (LOW == digitalRead(PIN_D07))) {
-    tetris = true;
+  if (LOW == digitalRead(PIN_D07)) {
+    menu_main();
   }
-#endif
-#ifdef USE_BREAKOUT
-  if ((analogRead(A5) > 500) && (LOW == digitalRead(PIN_D07))) {
-    breakout = true;
-  }
-#endif
-  if (tetris || breakout) {
-    struct msg_s smsg;
+#endif // USE_MENU
 
-    smsg.cmd = VOL;
-    smsg.arg = -100;
-    mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
-
-    smsg.cmd = REPEAT;
-    smsg.arg = 1;
-    mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
-
-#ifdef USE_TETRIS
-    if (tetris) {
-      smsg.cmd = PLAY;
-      smsg.arg = 99;
-      mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
-
-      //printf("Let's Tetris\n");
-      tetris_main();
-    }
-#endif
-#ifdef USE_BREAKOUT
-    if (breakout) {
-      smsg.cmd = PLAY;
-      smsg.arg = 41;
-      mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
-
-      //printf("Let's Breakout\n");
-      breakout_main();
-    }
-#endif
-    smsg.cmd = STOP;
-    smsg.arg = 0;
-    mq_send(mqd1, (const char*)&smsg, sizeof(msg_s), 0);
-  }
   /* STREAMREAD - processing incoming messagse as soon as possible, while still
    * checking digital inputs.  */
   while (Firmata.available())
