@@ -11,10 +11,10 @@ MenuSystem::MenuSystem()
 
 void MenuSystem::start(void)
 {
-    _tft.begin();
+    //_tft.begin();
     _tft.setTextWrap(false);
     _tft.setRotation(1);
-    _tft.setTextSize(3);
+    _tft.setTextSize(2);
 }
 
 void MenuSystem::setMenu(char** menu, uint8_t size) {
@@ -38,7 +38,7 @@ void MenuSystem::setFunc(CurrentFuncPtr* funcs, uint8_t size) {
 void MenuSystem::displayMenu(void) {
     int i;
     _tft.fillScreen(ILI9341_BLACK);
-    _tft.setTextSize(3);
+    _tft.setTextSize(2);
     _tft.setCursor(0, 0);
     _tft.setTextColor(ILI9341_GREEN, ILI9341_BLACK);
     _tft.println(current_menu[0]);

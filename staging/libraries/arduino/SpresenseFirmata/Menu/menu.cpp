@@ -164,6 +164,15 @@ void menuInput(void) {
     returnMainMenu();
   }
 
+  if (Joystick::pressed(BUTTON_A)) {
+    Joystick::waitForRelease(BUTTON_A);
+    menu.action(SELECT);
+  }
+  if (Joystick::pressed(BUTTON_B)) {
+    Joystick::waitForRelease(BUTTON_B);
+    returnMainMenu();
+  }
+
   if (Joystick::pressed(BUTTON_SELECT)) {
     Joystick::waitForRelease(BUTTON_SELECT);
     menu.action(DOWN);

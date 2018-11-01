@@ -194,10 +194,7 @@ class Breakout
 
     void newLevel()
     {
-      // ANALOG 2 SHOULD NOT BE CONNECTED TO ANYTHING.
-      // PLEASE LEAVE PIN FLOATING
-    
-      randomSeed(analogRead(A2));
+      randomSeed((unsigned long)(millis() & 0xffffffff));
 
       tiles.drawAll();
 

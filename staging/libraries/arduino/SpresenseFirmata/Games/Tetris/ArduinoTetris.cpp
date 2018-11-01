@@ -23,7 +23,7 @@
 #include <Adafruit_ILI9341.h> // Hardware-specific library
 #include "../joystick.h"
 #include "../TFTv2_extended.h"
-#include "tetris.cpp"
+#include "Tetris.cpp"
 
 void drawPreGameScreen()
 {

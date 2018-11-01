@@ -153,9 +153,7 @@ class Tetris
 
   void run()
   {
-    // analog 2 MUST NOT be connected to anything...
-    
-    randomSeed(analogRead(A2));
+    randomSeed((unsigned long)(millis() & 0xffffffff));
 
     // clear board
     
